@@ -6,7 +6,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const file string = "../../database/imbere.db"
+const file string = "./database/imbere.db"
 
 func DbCon() *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(file), &gorm.Config{})

@@ -4,10 +4,13 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/rssb/imbere/pkg/db"
 	"github.com/rssb/imbere/pkg/pull_request"
 )
 
 func main() {
+	dbInit() //
+
 	router := gin.Default()
 
 	r := router.Group("/api/v1")
@@ -23,12 +26,43 @@ func main() {
 	router.Run()
 }
 
-// function that receives repoaddress, branchname
-// clone the branch from the repo
-// install
-// build
-// start pm2 instance
-// store details in db(sqlite)
+// Check database connection
+// and Create tables in db;
+func dbInit() {
+	db := db.DbCon()
+
+	db.AutoMigrate(&pull_request.PullRequest{})
+}
+
+
+// PULL REQUESTS
+// once any accepted event is triggered on webhook, we do the following
+//	 1. we extract information from the payload
+//		a. if event is related to new PR or changes in PR (pull_request.open, pull_request.reopen, workflow_run.completed) or labeled deployment IMBERE_DEPLOY
+//			a.1. we create directory for the pr or replace it if it exists
+//			a.2. we pull latest changes from the pr
+//			a.3. we store/update the information for the pr in db
+//			a.4. we notify the deployment service to deploy
+// 		b. if the event is related to closed pr or unlabeled IMBERE_DEPLOY
+// 			b.1 we delete the directory that contains changes
+//			b.2 we update information in db
+// 			b.3 we notify the deployment service to undeploy
+//	Note: Every process is communicated to github
+
+
+// DEPLOYMENTS
+//	a. ON_DEPLOY
+//		a.1 install packages
+// 		b.2 build project
+//		b.3 check if there was no deployment dedicated to that PR
+//		b.4 if it existed kill existing deployment
+// 		b.5  deploy (to given deployment service)
+//		b.6 store/update deployment information in db
+//	 b. ON_UNDEPLOY
+//		b.1 undeploy (from given deployment service)
+// 		b.2 update deployment info in db
+//	Note: Every process is communicated to github
+
 
 // communicate to github the status (probably a separate function that would communicate every step)
 

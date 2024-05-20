@@ -8,6 +8,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// HandleWebhook is the main entry point for handling incoming github webhooks.
+// It parses the payload, extracts the event type, and handles the event if it's one of the supported types.
+// If the event is handled, it creates a PullRequest from the payload, and then pulls the changes(which later triggers deployment).
+// If the event is not handled, it simply returns a 202 Accepted response.
 func HandleWebhook(c *gin.Context) {
 	var payload map[string]any
 
@@ -57,7 +61,9 @@ func HandleWebhook(c *gin.Context) {
 		"message": "not yet started",
 	})
 }
-
+// createPullRequestFromPayload creates a PullRequest from the given payload.
+// It extracts the repository information, branch name, PR ID, PR number, and PR URL from the payload.
+// If any of these extractions fail, it returns an error.
 func createPullRequestFromPayload(event Event, payload map[string]interface{}) (*PullRequest, error) {
 	repository, ok := payload["repository"].(map[string]interface{})
 	if !ok {
@@ -111,6 +117,7 @@ func createPullRequestFromPayload(event Event, payload map[string]interface{}) (
 
 	return &PR, nil
 }
+
 
 func returnError(c *gin.Context, message string) {
 	c.JSON(http.StatusBadRequest, gin.H{

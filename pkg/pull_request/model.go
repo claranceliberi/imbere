@@ -30,7 +30,17 @@ func (repo *PullRequestRepo) prepareDbConnection() {
 func (repo *PullRequestRepo) Save(pr *PullRequest) error {
 	repo.prepareDbConnection()
 
-	result := repo.db.Save(pr)
+	result := repo.db.Where(PullRequest{PrID: pr.PrID}).Assign(PullRequest{
+		PrNumber:          pr.PrNumber,
+		BranchName:        pr.BranchName,
+		PrUrl:             pr.PrUrl,
+		RepoName:          pr.RepoName,
+		RepoAddress:       pr.RepoAddress,
+		SSHAddress:        pr.SSHAddress,
+		WorkflowSucceeded: pr.WorkflowSucceeded,
+		LabeledToDeploy:   pr.LabeledToDeploy,
+		Active:            pr.Active,
+	}).FirstOrCreate(pr)
 
 	if result.Error != nil {
 		return result.Error

@@ -7,6 +7,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// The Event type is derived from the incoming payload. This type standardizes 
+// the payload structure,
 func extractEventType(c *gin.Context, payload map[string]any) (Event, error) {
 	// Get the X-GitHub-Event header
 	eventType := c.GetHeader("X-GitHub-Event")
@@ -28,6 +30,8 @@ func extractEventType(c *gin.Context, payload map[string]any) (Event, error) {
 
 	return event, nil
 }
+
+// extract pull request branch from payload
 func extractBranchName(event Event, payload map[string]any) (string, error) {
 	name := event.name
 	var branchName string
@@ -68,6 +72,7 @@ func extractBranchName(event Event, payload map[string]any) (string, error) {
 	return branchName, nil
 }
 
+// extract pull request id from payload
 func extractPRID(event Event, payload map[string]any) (float64, error) {
 	name := event.name
 	var prId float64
@@ -103,6 +108,7 @@ func extractPRID(event Event, payload map[string]any) (float64, error) {
 	return prId, nil
 }
 
+// extract pull request number from payload
 func extractPRNumber(event Event, payload map[string]any) (float64, error) {
 	name := event.name
 	var prNumber float64
@@ -138,7 +144,7 @@ func extractPRNumber(event Event, payload map[string]any) (float64, error) {
 	return prNumber, nil
 }
 
-
+// extra pull request github url from payload
 func extractUrl(event Event, payload map[string]any) (string, error) {
 	name := event.name
 	var prUrl string
