@@ -3,13 +3,86 @@ package pull_request
 import (
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/rssb/imbere/pkg/db"
 )
 
-// The Event type is derived from the incoming payload. This type standardizes 
+// createPullRequestFromPayload creates a PullRequest from the given payload.
+// It extracts the repository information, branch name, PR ID, PR number, and PR URL from the payload.
+// If any of these extractions fail, it returns an error.
+func CreatePullRequestFromPayload(event Event, payload map[string]interface{}) (*db.PullRequest, error) {
+	repository, ok := payload["repository"].(map[string]interface{})
+	if !ok {
+		return &db.PullRequest{}, fmt.Errorf("failed to parse repository from payload")
+	}
+
+	repositoryName, ok := repository["name"].(string)
+	if !ok {
+		return &db.PullRequest{}, fmt.Errorf("failed to parse repository name from payload")
+	}
+
+	repositoryAddress, ok := repository["html_url"].(string)
+	if !ok {
+		return &db.PullRequest{}, fmt.Errorf("failed to parse repository address from payload")
+	}
+
+	sshAddress, ok := repository["ssh_url"].(string)
+	if !ok {
+		return &db.PullRequest{}, fmt.Errorf("failed to parse ssh address from payload")
+	}
+
+	ownerName, ownerId, err := extractRepoOwnerInfo(payload)
+
+	if err != nil {
+		return &db.PullRequest{}, err
+	}
+
+	branchName, err := extractBranchName(event, payload)
+	if err != nil {
+		return &db.PullRequest{}, err
+	}
+
+	prId, err := extractPRID(event, payload)
+	if err != nil {
+		return &db.PullRequest{}, err
+	}
+
+	prNumber, err := extractPRNumber(event, payload)
+	if err != nil {
+		return &db.PullRequest{}, err
+	}
+
+	prUrl, err := extractUrl(event, payload)
+	if err != nil {
+		return &db.PullRequest{}, err
+	}
+
+	installationID, err := extractInstallationID(event, payload)
+	if err != nil {
+		return &db.PullRequest{}, err
+	}
+
+	PR := db.PullRequest{
+		BranchName:     branchName,
+		RepoName:       repositoryName,
+		RepoAddress:    repositoryAddress,
+		SSHAddress:     sshAddress,
+		PrID:           prId,
+		PrNumber:       prNumber,
+		PrUrl:          prUrl,
+		InstallationID: installationID,
+		OwnerName:      ownerName,
+		OwnerID:        ownerId,
+	}
+
+	return &PR, nil
+}
+
+// The Event type is derived from the incoming payload. This type standardizes
 // the payload structure,
-func extractEventType(c *gin.Context, payload map[string]any) (Event, error) {
+func ExtractEventType(c *gin.Context, payload map[string]any) (Event, error) {
 	// Get the X-GitHub-Event header
 	eventType := c.GetHeader("X-GitHub-Event")
 
@@ -24,158 +97,164 @@ func extractEventType(c *gin.Context, payload map[string]any) (Event, error) {
 	if action, ok := payload["action"].(string); ok {
 		// If there is 'action' key, return 'eventType.action'
 		event.action = action
-		event.nameAction = eventType + "." + action
 		return event, nil
 	}
 
 	return event, nil
 }
 
-// extract pull request branch from payload
-func extractBranchName(event Event, payload map[string]any) (string, error) {
-	name := event.name
+func extractValueFromPayload(payload map[string]interface{}, path ...string) (interface{}, error) {
+    var temp interface{} = payload
+
+    for _, p := range path {
+        switch v := temp.(type) {
+        case map[string]interface{}:
+            var ok bool
+            temp, ok = v[p]
+            if !ok {
+                return nil, errors.New("Could not extract value - path does not exist")
+            }
+        case []interface{}:
+            index, err := strconv.Atoi(p)
+            if err != nil || index < 0 || index >= len(v) {
+                return nil, errors.New("Could not extract value - invalid array index")
+            }
+            temp = v[index]
+        default:
+            return nil, errors.New("Could not extract value - path does not exist")
+        }
+    }
+
+    return temp, nil
+}
+
+func extractBranchName(event Event, payload map[string]interface{}) (string, error) {
 	var branchName string
+	var err error
+	var temp interface{}
 
-	if name == "pull_request" {
-		pullRequest, ok := payload["pull_request"].(map[string]any)
-		if !ok {
-			return "", errors.New(event.nameAction + " - Could not extract branch name from pull_request - no pull_request :" + fmt.Sprintf("%v", pullRequest))
-		}
-
-		head, ok := pullRequest["head"].(map[string]any)
-		if !ok {
-			return "", errors.New(event.nameAction + " - Could not extract branch name - no head :" + fmt.Sprintf("%v", head))
-		}
-
-		branchName, _ = head["ref"].(string)
+	if event.name == "pull_request" {
+		temp, err = extractValueFromPayload(payload, "pull_request", "head", "ref")
+	} else if event.name == "workflow_run" {
+		temp, err = extractValueFromPayload(payload, "workflow_run", "pull_requests", "0", "head", "ref")
 	}
 
-	if name == "workflow_run" {
-		workflowRun, ok := payload["workflow_run"].(map[string]any)
+	if err != nil {
+		return "", errors.New(event.GetNameAction() + " - Could not extract branch name: " + err.Error())
+	}
 
-		if !ok {
-			return "", errors.New(event.nameAction + " - Could not extract branch name from workflow_run - no workflow_run :" + fmt.Sprintf("%v", workflowRun))
-		}
-		pullRequests, ok := workflowRun["pull_requests"].([]interface{})
-		if !ok || len(pullRequests) == 0 {
-			return "", errors.New(event.nameAction + " - Could not extract branch name from workflow_run - no pull_requests :" + fmt.Sprintf("%v", pullRequests))
-
-		}
-
-		head, ok := pullRequests[0].(map[string]any)["head"].(map[string]any)
-		if !ok {
-			return "", errors.New(event.nameAction + " - Could not extract branch name from workflow_run - no head :" + fmt.Sprintf("%v", head))
-		}
-		branchName, _ = head["ref"].(string)
+	branchName, ok := temp.(string)
+	if !ok {
+		return "", errors.New(event.GetNameAction() + " - Could not extract branch name: value is not a string")
 	}
 
 	return branchName, nil
 }
 
-// extract pull request id from payload
-func extractPRID(event Event, payload map[string]any) (float64, error) {
-	name := event.name
-	var prId float64
-	errorMessage := errors.New(event.nameAction + " - Could not extract PR ID")
+func extractPRID(event Event, payload map[string]interface{}) (int64, error) {
+	var err error
+	var temp interface{}
 
-	if name == "pull_request" {
-		pullRequest, ok := payload["pull_request"].(map[string]any)
-		if !ok {
-			return 0, errorMessage
-		}
-
-		prId, _ = pullRequest["id"].(float64)
+	if event.name == "pull_request" {
+		temp, err = extractValueFromPayload(payload, "pull_request", "id")
+	} else if event.name == "workflow_run" {
+		temp, err = extractValueFromPayload(payload, "workflow_run", "pull_requests", "0", "id")
 	}
 
-	if name == "workflow_run" {
-		workflowRun, ok := payload["workflow_run"].(map[string]any)
-		if !ok {
-			return 0, errorMessage
-		}
-		pullRequests, ok := workflowRun["pull_requests"].([]interface{})
-		if !ok || len(pullRequests) == 0 {
-			return 0, errorMessage
-
-		}
-
-		pullRequest, ok := pullRequests[0].(map[string]any)
-		if !ok {
-			return 0, errorMessage
-		}
-		prId, _ = pullRequest["id"].(float64)
+	if err != nil {
+		return 0, errors.New(event.GetNameAction() + " - Could not extract pull request id: " + err.Error())
 	}
 
-	return prId, nil
+	prId, ok := temp.(float64)
+	if !ok {
+		return 0, errors.New(event.GetNameAction() + " - Could not extract pull request id: value is not a int64")
+	}
+
+	return int64(prId), nil
 }
 
-// extract pull request number from payload
-func extractPRNumber(event Event, payload map[string]any) (float64, error) {
-	name := event.name
-	var prNumber float64
-	errorMessage := errors.New(event.nameAction + " - Could not extract PR Number")
+func extractPRNumber(event Event, payload map[string]interface{}) (int64, error) {
+	var err error
+	var temp interface{}
 
-	if name == "pull_request" {
-		pullRequest, ok := payload["pull_request"].(map[string]any)
-		if !ok {
-			return 0, errorMessage
-		}
-
-		prNumber, _ = pullRequest["number"].(float64)
+	if event.name == "pull_request" {
+		temp, err = extractValueFromPayload(payload, "pull_request", "number")
+	} else if event.name == "workflow_run" {
+		temp, err = extractValueFromPayload(payload, "workflow_run", "pull_requests", "0", "number")
 	}
 
-	if name == "workflow_run" {
-		workflowRun, ok := payload["workflow_run"].(map[string]any)
-		if !ok {
-			return 0, errorMessage
-		}
-		pullRequests, ok := workflowRun["pull_requests"].([]interface{})
-		if !ok || len(pullRequests) == 0 {
-			return 0, errorMessage
-
-		}
-
-		pullRequest, ok := pullRequests[0].(map[string]any)
-		if !ok {
-			return 0, errorMessage
-		}
-		prNumber, _ = pullRequest["number"].(float64)
+	if err != nil {
+		return 0, errors.New(event.GetNameAction() + " - Could not extract pull request number: " + err.Error())
 	}
 
-	return prNumber, nil
+	prNumber, ok := temp.(float64)
+	if !ok {
+		return 0, errors.New(event.GetNameAction() + " - Could not extract pull request number: value is not a int64")
+	}
+
+	return int64(prNumber), nil
 }
 
-// extra pull request github url from payload
-func extractUrl(event Event, payload map[string]any) (string, error) {
-	name := event.name
-	var prUrl string
-	errorMessage := errors.New(event.nameAction + " - Could not extract PR URL")
+func extractUrl(event Event, payload map[string]interface{}) (string, error) {
+	var err error
+	var temp interface{}
 
-	if name == "pull_request" {
-		pullRequest, ok := payload["pull_request"].(map[string]any)
-		if !ok {
-			return "", errorMessage
-		}
-
-		prUrl, _ = pullRequest["url"].(string)
+	if event.name == "pull_request" {
+		temp, err = extractValueFromPayload(payload, "pull_request", "url")
+	} else if event.name == "workflow_run" {
+		temp, err = extractValueFromPayload(payload, "workflow_run", "pull_requests", "0", "url")
 	}
 
-	if name == "workflow_run" {
-		workflowRun, ok := payload["workflow_run"].(map[string]any)
-		if !ok {
-			return "", errorMessage
-		}
-		pullRequests, ok := workflowRun["pull_requests"].([]interface{})
-		if !ok || len(pullRequests) == 0 {
-			return "", errorMessage
+	if err != nil {
+		return "", errors.New(event.GetNameAction() + " - Could not extract pull request url: " + err.Error())
+	}
 
-		}
-
-		pullRequest, ok := pullRequests[0].(map[string]any)
-		if !ok {
-			return "", errorMessage
-		}
-		prUrl, _ = pullRequest["url"].(string)
+	prUrl, ok := temp.(string)
+	if !ok {
+		return "", errors.New(event.GetNameAction() + " - Could not extract pull request url: value is not a string")
 	}
 
 	return prUrl, nil
+}
+
+func extractInstallationID(event Event, payload map[string]interface{}) (int64, error) {
+	var err error
+	var temp interface{}
+
+	temp, err = extractValueFromPayload(payload, "installation", "id")
+
+	if err != nil {
+		return 0, errors.New(event.GetNameAction() + " - Could not extract installation Id: " + err.Error())
+	}
+
+	installationId, ok := temp.(float64)
+	if !ok {
+		return 0, errors.New(event.GetNameAction() + " - Could not extract installation Id: value is not a string")
+	}
+
+	return int64(installationId), nil
+}
+
+func extractRepoOwnerInfo(payload map[string]interface{}) (string, int64, error) {
+	ownerNameValue, err := extractValueFromPayload(payload, "repository", "owner", "login")
+	if err != nil {
+		return "", 0, fmt.Errorf("failed to parse owner name from payload: %v", err)
+	}
+
+	ownerName, ok := ownerNameValue.(string)
+	if !ok {
+		return "", 0, fmt.Errorf("failed to parse owner name from payload: value is not a string")
+	}
+
+	ownerIDValue, err := extractValueFromPayload(payload, "repository", "owner", "id")
+	if err != nil {
+		return "", 0, fmt.Errorf("failed to parse owner ID from payload: %v", err)
+	}
+
+	ownerID, ok := ownerIDValue.(float64)
+	if !ok {
+		return "", 0, fmt.Errorf("failed to parse owner ID from payload: value is not an integer")
+	}
+
+	return ownerName, int64(ownerID), nil
 }

@@ -8,7 +8,7 @@ import (
 
 const file string = "./database/imbere.db"
 
-func DbCon() *gorm.DB {
+func dbCon() *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(file), &gorm.Config{})
 
 	if err != nil {
@@ -16,4 +16,12 @@ func DbCon() *gorm.DB {
 	}
 
 	return db
+}
+
+// Check database connection
+// and Create tables in db;
+func DbInit() {
+	db := dbCon()
+
+	db.AutoMigrate(&PullRequest{})
 }

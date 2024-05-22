@@ -1,15 +1,19 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rssb/imbere/pkg/db"
+	"github.com/rssb/imbere/pkg/deployment"
+	"github.com/rssb/imbere/pkg/process_monitor"
 	"github.com/rssb/imbere/pkg/pull_request"
+	"github.com/rssb/imbere/pkg/utils"
 )
 
 func main() {
-	dbInit() //
+	db.DbInit() //
 
 	router := gin.Default()
 
@@ -21,19 +25,84 @@ func main() {
 		})
 	})
 
-	r.POST("/github/webhook", pull_request.HandleWebhook)
+	r.POST("/github/webhook", HandleWebhook)
 
 	router.Run()
 }
 
-// Check database connection
-// and Create tables in db;
-func dbInit() {
-	db := db.DbCon()
+// HandleWebhook is the main entry point for handling incoming github webhooks.
+// It parses the payload, extracts the event type, and handles the event if it's one of the supported types.
+// If the event is handled, it creates a PullRequest from the payload, and then pulls the changes(which later triggers deployment).
+// If the event is not handled, it simply returns a 202 Accepted response.
+func HandleWebhook(c *gin.Context) {
+	var payload map[string]any
 
-	db.AutoMigrate(&pull_request.PullRequest{})
+	if err := c.ShouldBindJSON(&payload); err != nil {
+
+		utils.ReturnError(c, err.Error())
+	}
+
+	// fmt.Println("Got Payload %d", payload)
+
+	// get event type
+	event, err := pull_request.ExtractEventType(c, payload)
+
+	if err != nil {
+		utils.ReturnError(c, err.Error())
+		return
+	}
+
+	nameAction := event.GetNameAction()
+
+	fmt.Println(nameAction)
+
+	isHandledEVentAction := nameAction == "workflow_run.completed" || nameAction == "pull_request.closed" || nameAction == "pull_request.opened" || nameAction == "pull_request.reopened"
+
+	if isHandledEVentAction {
+
+		PR, err := pull_request.CreatePullRequestFromPayload(event, payload)
+
+		if err != nil {
+			utils.ReturnError(c, err.Error())
+		}
+
+		processMonitor := process_monitor.NewProcessMonitor(PR)
+
+		prService := pull_request.NewPullRequestService(PR, processMonitor)
+
+		err = prService.PullChanges()
+
+		if err != nil {
+			utils.ReturnError(c, err.Error())
+		}
+
+		deploymentService := deployment.NewDeploymentService(PR, processMonitor)
+
+		err = deploymentService.InstallDependencies()
+		if err != nil {
+			utils.ReturnError(c, err.Error())
+		}
+
+		err = deploymentService.Build()
+		if err != nil {
+			utils.ReturnError(c, err.Error())
+		}
+
+		err = deploymentService.DeployToPM2()
+		if err != nil {
+			utils.ReturnError(c, err.Error())
+		}
+
+		c.JSON(http.StatusCreated, gin.H{
+			"message": "not yet started",
+		})
+		return
+	}
+
+	c.JSON(http.StatusAccepted, gin.H{
+		"message": "not yet started",
+	})
 }
-
 
 // PULL REQUESTS
 // once any accepted event is triggered on webhook, we do the following
@@ -49,7 +118,6 @@ func dbInit() {
 // 			b.3 we notify the deployment service to undeploy
 //	Note: Every process is communicated to github
 
-
 // DEPLOYMENTS
 //	a. ON_DEPLOY
 //		a.1 install packages
@@ -62,7 +130,6 @@ func dbInit() {
 //		b.1 undeploy (from given deployment service)
 // 		b.2 update deployment info in db
 //	Note: Every process is communicated to github
-
 
 // communicate to github the status (probably a separate function that would communicate every step)
 
