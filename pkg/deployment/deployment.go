@@ -81,8 +81,17 @@ func (service *DeploymentService) Build() error {
 }
 
 func (service *DeploymentService) DeployToPM2() error {
-	service.monitor.AddLog("-------- Starting Service:" + service.pr.GetPrId())
-	cmd := exec.Command("sh", "-c", "pm2 start 'nr start' --name "+service.pr.GetPrId()+" --namespace "+constants.PM2_NAMESPACE)
+	var cmd *exec.Cmd
+
+	// If there's an active deployment, we restart it. This approach ensures 
+	// that we only have a single instance of the app running, even when there 
+	// are changes to the pull request.
+	if service.pr.Deployed {
+		cmd = exec.Command("sh", "-c", "pm2 restart "+service.pr.GetPrId())
+	} else {
+		cmd = exec.Command("sh", "-c", "pm2 start 'nr start' --name "+service.pr.GetPrId()+" --namespace "+constants.PM2_NAMESPACE)
+
+	}
 	cmd.Dir = service.WorkingDirectory()
 	port := int32(3333)
 	cmd.Env = append(os.Environ(), "PORT="+string(port))
@@ -104,6 +113,7 @@ func (service *DeploymentService) DeployToPM2() error {
 		return err
 	}
 
+	// update db record , indicating that the pr is currently deployed
 	_, err := service.prRepo.Deploy(service.pr.PrID, port)
 
 	if err != nil {
