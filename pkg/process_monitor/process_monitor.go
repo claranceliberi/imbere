@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"log"
 	"os/exec"
+	"strconv"
 
 	"github.com/rssb/imbere/pkg/client"
 	"github.com/rssb/imbere/pkg/constants"
 	"github.com/rssb/imbere/pkg/db"
+	"github.com/rssb/imbere/pkg/utils"
 )
 
 type ProcessMonitor struct {
@@ -18,10 +20,11 @@ type ProcessMonitor struct {
 	Logs     chan string
 	client   *client.GithubClient
 	pr       *db.PullRequest
+	prRepo   *db.PullRequestRepo
 }
 
 func NewProcessMonitor(pr *db.PullRequest) *ProcessMonitor {
-
+	prRepo := &db.PullRequestRepo{}
 	processMonitor := &ProcessMonitor{
 		ID:       pr.PrID,
 		Progress: constants.PROCESS_PROGRESS_STARTED,
@@ -29,6 +32,7 @@ func NewProcessMonitor(pr *db.PullRequest) *ProcessMonitor {
 		Logs:     make(chan string),
 		client:   client.NewGithubClient(pr.InstallationID),
 		pr:       pr,
+		prRepo:   prRepo,
 	}
 
 	processMonitor.HandleLogs() // immediately start listening to logs
@@ -40,28 +44,46 @@ func (p *ProcessMonitor) UpdateProgress(progress constants.ProcessProgress, stat
 	p.Progress = progress
 	p.Status = status
 
-	appURL := "http://localhost" // replace with your app's URL
-	comment := fmt.Sprintf("[App Link](%s:%d)", appURL, p.pr.DeploymentPort)
+	appURL := "http://" + constants.IP_ADDRESS + ":" + strconv.Itoa(int(p.pr.DeploymentPort))
+
+	progressMarkdown := utils.ParseProgressToMD(p.Progress, p.Status)
+	progressMarkdown.PlainText("")
+	progressMarkdown.H2("Deployment Url")
+	progressMarkdown.PlainText(appURL)
+	progressMarkdown.H2("Status")
+
+	if p.Progress == constants.PROCESS_PROGRESS_DEPLOYING && p.Status == constants.PROCESS_OUTCOME_SUCCEEDED {
+		progressMarkdown.GreenBadge("Deployed")
+	}else if p.Status == constants.PROCESS_OUTCOME_FAILED{
+		progressMarkdown.RedBadge("Failed")
+	}else{
+		progressMarkdown.YellowBadge("Deploying")
+	}
 
 	owner := p.pr.OwnerName
 	repo := p.pr.RepoName
 	prNumber := p.pr.PrNumber
 	commentId := p.pr.CommentID
 
-	if p.Progress == constants.PROCESS_PROGRESS_DEPLOYING && p.Status == constants.PROCESS_OUTCOME_SUCCEEDED {
-		log.Printf("CommentId: %d, Owner: %s, Repo: %s, PR Number: %d, Comment: %s\n", commentId, owner, repo, prNumber, comment)
-		var err error
-		var id *int64
-		if commentId == 0 {
-			id, err = p.client.CreateComment(owner, repo, prNumber, comment)
-		} else {
-			id, err = p.client.EditComment(commentId, owner, repo, comment)
-		}
 
-		log.Printf("Id was created %s, or Error  %s", id, err)
+
+	log.Printf("CommentId: %d, Owner: %s, Repo: %s, PR Number: %d, Comment: %s\n", commentId, owner, repo, prNumber, progressMarkdown.String())
+
+	var err error
+	var id *int64
+	if commentId == 0 {
+		id, err = p.client.CreateComment(owner, repo, prNumber, progressMarkdown.String())
+		pullRequest := p.pr
+
+		pullRequest.CommentID = *id
+		p.prRepo.Save(pullRequest)
+	} else {
+		id, err = p.client.EditComment(commentId, owner, repo, progressMarkdown.String())
 	}
 
-	fmt.Printf("Process ID: %s, Progress: %s, Status: %d\n", p.ID, p.Progress, p.Status)
+	log.Printf("Id was created %d, or Error  %s", *id, err)
+
+	fmt.Printf("Process ID: %d, Progress: %d, Status: %d\n", p.ID, p.Progress, p.Status)
 	// To communicate the status to github
 }
 

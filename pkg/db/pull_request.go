@@ -1,4 +1,4 @@
-package db;
+package db
 
 import (
 	"fmt"
@@ -79,7 +79,7 @@ func (repo *PullRequestRepo) GetByPrID(prId int64) (*PullRequest, error) {
 
 	var pr PullRequest
 
-	result := repo.db.Where("pr_id", prId)
+	result := repo.db.Where(&PullRequest{PrID: prId}).First(&pr)
 
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
@@ -88,8 +88,6 @@ func (repo *PullRequestRepo) GetByPrID(prId int64) (*PullRequest, error) {
 
 		return nil, result.Error
 	}
-
-	result.First(&pr)
 
 	return &pr, nil
 }

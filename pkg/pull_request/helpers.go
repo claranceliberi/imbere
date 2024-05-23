@@ -64,20 +64,31 @@ func CreatePullRequestFromPayload(event Event, payload map[string]interface{}) (
 		return &db.PullRequest{}, err
 	}
 
-	PR := db.PullRequest{
-		BranchName:     branchName,
-		RepoName:       repositoryName,
-		RepoAddress:    repositoryAddress,
-		SSHAddress:     sshAddress,
-		PrID:           prId,
-		PrNumber:       prNumber,
-		PrUrl:          prUrl,
-		InstallationID: installationID,
-		OwnerName:      ownerName,
-		OwnerID:        ownerId,
+
+	prRepo := db.PullRequestRepo{}
+	// Try to get the PR by its ID
+	pr, err := prRepo.GetByPrID(prId)
+
+	if err == nil && pr == nil {
+		pr = &db.PullRequest{
+			PrID: prId,
+		}
+	} else if err != nil {
+		return nil, err
 	}
 
-	return &PR, nil
+	// If the PR exists, update its fields
+	pr.BranchName = branchName
+	pr.RepoName = repositoryName
+	pr.RepoAddress = repositoryAddress
+	pr.SSHAddress = sshAddress
+	pr.PrNumber = prNumber
+	pr.PrUrl = prUrl
+	pr.InstallationID = installationID
+	pr.OwnerName = ownerName
+	pr.OwnerID = ownerId
+
+	return pr, nil
 }
 
 // The Event type is derived from the incoming payload. This type standardizes
@@ -104,28 +115,28 @@ func ExtractEventType(c *gin.Context, payload map[string]any) (Event, error) {
 }
 
 func extractValueFromPayload(payload map[string]interface{}, path ...string) (interface{}, error) {
-    var temp interface{} = payload
+	var temp interface{} = payload
 
-    for _, p := range path {
-        switch v := temp.(type) {
-        case map[string]interface{}:
-            var ok bool
-            temp, ok = v[p]
-            if !ok {
-                return nil, errors.New("Could not extract value - path does not exist")
-            }
-        case []interface{}:
-            index, err := strconv.Atoi(p)
-            if err != nil || index < 0 || index >= len(v) {
-                return nil, errors.New("Could not extract value - invalid array index")
-            }
-            temp = v[index]
-        default:
-            return nil, errors.New("Could not extract value - path does not exist")
-        }
-    }
+	for _, p := range path {
+		switch v := temp.(type) {
+		case map[string]interface{}:
+			var ok bool
+			temp, ok = v[p]
+			if !ok {
+				return nil, errors.New("Could not extract value - path does not exist")
+			}
+		case []interface{}:
+			index, err := strconv.Atoi(p)
+			if err != nil || index < 0 || index >= len(v) {
+				return nil, errors.New("Could not extract value - invalid array index")
+			}
+			temp = v[index]
+		default:
+			return nil, errors.New("Could not extract value - path does not exist")
+		}
+	}
 
-    return temp, nil
+	return temp, nil
 }
 
 func extractBranchName(event Event, payload map[string]interface{}) (string, error) {

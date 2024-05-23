@@ -1,0 +1,8 @@
+- check if there is active deployment and reload ✅
+- get custom ip address public ✅
+- generate random port
+- update github on every progress
+- support only PR with IMBERE_DEPLOYMENT label
+
+
+// undeploy logic

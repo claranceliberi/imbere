@@ -8,6 +8,8 @@ const PM2_NAMESPACE = "IMBERE"
 // IMBERE2 github app id
 const GITHUB_APP_ID = 903361
 
+const IP_ADDRESS = "localhost"
+
 type ProcessProgress int
 
 const (
@@ -24,7 +26,8 @@ const (
 type ProcessOutcome int
 
 const (
-	PROCESS_OUTCOME_ONGOING ProcessOutcome = iota
+	PROCESS_OUTCOME_NOT_YET ProcessOutcome = iota
+	PROCESS_OUTCOME_ONGOING
 	PROCESS_OUTCOME_SUCCEEDED
 	PROCESS_OUTCOME_FAILED
 )
