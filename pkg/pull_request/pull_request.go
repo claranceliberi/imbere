@@ -154,9 +154,9 @@ func (service *PullRequestService) PullChanges() error {
 	return nil
 }
 
-func (service *PullRequestService) MarkActive() {
+func (service *PullRequestService) MarkActive() error {
 	service.pr.Active = true
-	service.save()
+	return service.save()
 }
 
 func (service *PullRequestService) Deploy() error {
@@ -208,6 +208,8 @@ func (service *PullRequestService) UnDeploy() error {
 func (service *PullRequestService) UpdateLabelToDeploy(isLabelPresent bool) error {
 	service.pr.LabeledToDeploy = isLabelPresent
 
+	log.Printf("Updating label to deploy %v", isLabelPresent)
+
 	if isLabelPresent && !service.pr.Deployed {
 		service.Deploy()
 	}
@@ -236,7 +238,7 @@ func HandlePR(event Event, payload map[string]interface{}) error {
 	prService := NewPullRequestService(PR, processMonitor)
 
 	if isPullRequestOpenedOrReopened {
-		
+		return prService.MarkActive()
 	} else if shouldDeploy {
 		return prService.Deploy()
 	} else if isPullRequestClosed {

@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"log"
 
 	"gorm.io/gorm"
 )
@@ -46,33 +47,48 @@ func (pr *PullRequest) GetDir() string {
 func (repo *PullRequestRepo) prepareDbConnection() {
 	repo.db = dbCon()
 }
-
 func (repo *PullRequestRepo) Save(pr *PullRequest) error {
-	repo.prepareDbConnection()
+    repo.prepareDbConnection()
 
-	result := repo.db.Where(PullRequest{PrID: pr.PrID}).Assign(PullRequest{
-		PrNumber:          pr.PrNumber,
-		BranchName:        pr.BranchName,
-		PrUrl:             pr.PrUrl,
-		RepoName:          pr.RepoName,
-		RepoAddress:       pr.RepoAddress,
-		SSHAddress:        pr.SSHAddress,
-		InstallationID:    pr.InstallationID,
-		WorkflowSucceeded: pr.WorkflowSucceeded,
-		LabeledToDeploy:   pr.LabeledToDeploy,
-		Active:            pr.Active,
-		Deployed:          pr.Deployed,
-		DeploymentPort:    pr.DeploymentPort,
-		OwnerName:         pr.OwnerName,
-		OwnerID:           pr.OwnerID,
-		CommentID:         pr.CommentID,
-	}).FirstOrCreate(pr)
+    log.Printf("saving pr %v", pr)
 
-	if result.Error != nil {
-		return result.Error
-	}
+    existing, err := repo.GetByPrID(pr.PrID)
 
-	return nil
+    if err != nil {
+        return err
+    }
+
+    if existing == nil {
+        result := repo.db.Create(pr)
+        if result.Error != nil {
+            return result.Error
+        }
+    } else {
+        result := repo.db.Model(existing).Updates(PullRequest{
+            PrNumber:          pr.PrNumber,
+            BranchName:        pr.BranchName,
+            PrUrl:             pr.PrUrl,
+            RepoName:          pr.RepoName,
+            RepoAddress:       pr.RepoAddress,
+            SSHAddress:        pr.SSHAddress,
+            InstallationID:    pr.InstallationID,
+            WorkflowSucceeded: pr.WorkflowSucceeded,
+            LabeledToDeploy:   pr.LabeledToDeploy,
+            Active:            pr.Active,
+            Deployed:          pr.Deployed,
+            DeploymentPort:    pr.DeploymentPort,
+            IsDeploying:       pr.IsDeploying,
+            OwnerName:         pr.OwnerName,
+            OwnerID:           pr.OwnerID,
+            CommentID:         pr.CommentID,
+        })
+
+        if result.Error != nil {
+            return result.Error
+        }
+    }
+
+    return nil
 }
 
 func (repo *PullRequestRepo) GetByPrID(prId int64) (*PullRequest, error) {
