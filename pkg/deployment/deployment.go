@@ -177,6 +177,7 @@ func (service *DeploymentService) UnDeploy() error {
 
 	service.pr = pr
 	service.log(fmt.Sprintf("successful undeployed pr ID: %d", pr.PrID))
+	service.monitor.UpdateProgress(constants.PROCESS_PROGRESS_UN_DEPLOYING, constants.PROCESS_OUTCOME_SUCCEEDED)
 
 	return nil
 }

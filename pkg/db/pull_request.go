@@ -51,6 +51,11 @@ func (repo *PullRequestRepo) Save(pr *PullRequest) error {
     repo.prepareDbConnection()
 
     log.Printf("saving pr %v", pr)
+	log.Printf("WorkflowSucceeded: %v", pr.WorkflowSucceeded)
+log.Printf("LabeledToDeploy: %v", pr.LabeledToDeploy)
+log.Printf("Active: %v", pr.Active)
+log.Printf("Deployed: %v", pr.Deployed)
+log.Printf("IsDeploying: %v", pr.IsDeploying)
 
     existing, err := repo.GetByPrID(pr.PrID)
 
@@ -64,7 +69,7 @@ func (repo *PullRequestRepo) Save(pr *PullRequest) error {
             return result.Error
         }
     } else {
-        result := repo.db.Model(existing).Updates(PullRequest{
+        result := repo.db.Model(existing).UpdateColumns(PullRequest{
             PrNumber:          pr.PrNumber,
             BranchName:        pr.BranchName,
             PrUrl:             pr.PrUrl,
@@ -118,7 +123,7 @@ func (repo *PullRequestRepo) Deploy(prId int64, port int32) (*PullRequest, error
 	}
 
 	pr.Deployed = true
-	pr.IsDeploying = false // deployment is done
+	pr.IsDeploying = false
 	pr.DeploymentPort = port
 
 	err = repo.Save(pr)
