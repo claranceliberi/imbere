@@ -45,7 +45,7 @@ func (service *PullRequestService) log(content string) {
 func (service *PullRequestService) removeDir() error {
 	dirPath := constants.BUILD_DIR + service.pr.GetDir()
 
-	if _, err := os.Stat(dirPath); os.IsExist(err) {
+	if _, err := os.Stat(dirPath); !os.IsNotExist(err) {
 		removeDirErr := os.RemoveAll(dirPath)
 
 		if removeDirErr != nil {
@@ -167,7 +167,6 @@ func (service *PullRequestService) Deploy() error {
 		err := service.PullChanges()
 
 		if err != nil {
-			// utils.ReturnError(c, err.Error())
 			return err
 		}
 
@@ -175,19 +174,16 @@ func (service *PullRequestService) Deploy() error {
 
 		err = deploymentService.InstallDependencies()
 		if err != nil {
-			// utils.ReturnError(c, err.Error())
 			return err
 		}
 
 		err = deploymentService.Build()
 		if err != nil {
-			// utils.ReturnError(c, err.Error())
 			return err
 		}
 
 		err = deploymentService.Deploy()
 		if err != nil {
-			// utils.ReturnError(c, err.Error())
 			return err
 		}
 
@@ -240,7 +236,7 @@ func HandlePR(event Event, payload map[string]interface{}) error {
 	prService := NewPullRequestService(PR, processMonitor)
 
 	if isPullRequestOpenedOrReopened {
-
+		
 	} else if shouldDeploy {
 		return prService.Deploy()
 	} else if isPullRequestClosed {

@@ -101,7 +101,7 @@ func (p *ProcessMonitor) AddLog(log string) {
 func (p *ProcessMonitor) HandleLogs() {
 	go func() {
 		for log := range p.Logs {
-			fmt.Printf("Process ID: %s, Log: %s\n", p.ID, log)
+			fmt.Printf("Process ID: %d, Log: %s\n", p.ID, log)
 			// just in case I might want to save logs or display them
 		}
 	}()

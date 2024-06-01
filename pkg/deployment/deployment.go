@@ -146,13 +146,13 @@ func (service *DeploymentService) deployToPM2(port int32) error {
 	service.monitor.ListenToCmd(cmd)
 
 	if startErr := cmd.Start(); startErr != nil {
-		service.log(fmt.Sprintf("deploy command failed with %s in %s \n", startErr, service.WorkingDirectory()))
+		service.log(fmt.Sprintf("start deploy command failed with %s in %s \n", startErr, service.WorkingDirectory()))
 		service.monitor.UpdateProgress(constants.PROCESS_PROGRESS_DEPLOYING, constants.PROCESS_OUTCOME_FAILED)
 		return startErr
 	}
 
 	if waitErr := cmd.Wait(); waitErr != nil {
-		service.log(fmt.Sprintf("deploy command failed with %s in %s \n", waitErr, service.WorkingDirectory()))
+		service.log(fmt.Sprintf("wait deploy command failed with %s in %s \n", waitErr, service.WorkingDirectory()))
 		service.monitor.UpdateProgress(constants.PROCESS_PROGRESS_DEPLOYING, constants.PROCESS_OUTCOME_FAILED)
 		return waitErr
 	}
