@@ -2,7 +2,6 @@ package db
 
 import (
 	"fmt"
-	"log"
 
 	"gorm.io/gorm"
 )
@@ -48,52 +47,45 @@ func (repo *PullRequestRepo) prepareDbConnection() {
 	repo.db = dbCon()
 }
 func (repo *PullRequestRepo) Save(pr *PullRequest) error {
-    repo.prepareDbConnection()
+	repo.prepareDbConnection()
 
-    log.Printf("saving pr %v", pr)
-	log.Printf("WorkflowSucceeded: %v", pr.WorkflowSucceeded)
-log.Printf("LabeledToDeploy: %v", pr.LabeledToDeploy)
-log.Printf("Active: %v", pr.Active)
-log.Printf("Deployed: %v", pr.Deployed)
-log.Printf("IsDeploying: %v", pr.IsDeploying)
+	existing, err := repo.GetByPrID(pr.PrID)
 
-    existing, err := repo.GetByPrID(pr.PrID)
+	if err != nil {
+		return err
+	}
 
-    if err != nil {
-        return err
-    }
+	if existing == nil {
+		result := repo.db.Create(pr)
+		if result.Error != nil {
+			return result.Error
+		}
+	} else {
+		result := repo.db.Model(existing).Updates(map[string]interface{}{
+			"PrNumber":          pr.PrNumber,
+			"BranchName":        pr.BranchName,
+			"PrUrl":             pr.PrUrl,
+			"RepoName":          pr.RepoName,
+			"RepoAddress":       pr.RepoAddress,
+			"SSHAddress":        pr.SSHAddress,
+			"InstallationID":    pr.InstallationID,
+			"WorkflowSucceeded": pr.WorkflowSucceeded,
+			"LabeledToDeploy":   pr.LabeledToDeploy,
+			"Active":            pr.Active,
+			"Deployed":          pr.Deployed,
+			"DeploymentPort":    pr.DeploymentPort,
+			"IsDeploying":       pr.IsDeploying,
+			"OwnerName":         pr.OwnerName,
+			"OwnerID":           pr.OwnerID,
+			"CommentID":         pr.CommentID,
+		})
 
-    if existing == nil {
-        result := repo.db.Create(pr)
-        if result.Error != nil {
-            return result.Error
-        }
-    } else {
-        result := repo.db.Model(existing).UpdateColumns(PullRequest{
-            PrNumber:          pr.PrNumber,
-            BranchName:        pr.BranchName,
-            PrUrl:             pr.PrUrl,
-            RepoName:          pr.RepoName,
-            RepoAddress:       pr.RepoAddress,
-            SSHAddress:        pr.SSHAddress,
-            InstallationID:    pr.InstallationID,
-            WorkflowSucceeded: pr.WorkflowSucceeded,
-            LabeledToDeploy:   pr.LabeledToDeploy,
-            Active:            pr.Active,
-            Deployed:          pr.Deployed,
-            DeploymentPort:    pr.DeploymentPort,
-            IsDeploying:       pr.IsDeploying,
-            OwnerName:         pr.OwnerName,
-            OwnerID:           pr.OwnerID,
-            CommentID:         pr.CommentID,
-        })
+		if result.Error != nil {
+			return result.Error
+		}
+	}
 
-        if result.Error != nil {
-            return result.Error
-        }
-    }
-
-    return nil
+	return nil
 }
 
 func (repo *PullRequestRepo) GetByPrID(prId int64) (*PullRequest, error) {

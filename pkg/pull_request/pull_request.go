@@ -161,7 +161,7 @@ func (service *PullRequestService) MarkActive() error {
 
 func (service *PullRequestService) Deploy() error {
 	if service.pr.IsDeploying {
-		log.Println("There is a deployment in progress for this PR ID: %s, skipping...", service.pr.GetPrId())
+		service.log(fmt.Sprintf("There is a deployment in progress for this PR ID: %s, skipping...", service.pr.GetPrId()))
 	} else {
 
 		err := service.PullChanges()
