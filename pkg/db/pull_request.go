@@ -26,6 +26,7 @@ type PullRequest struct {
 	WorkflowSucceeded bool   `gorm:"type:bool;not null;default:false"` // did workflow succeed from github
 	LabeledToDeploy   bool   `gorm:"type:bool;not null;default:false"` // is PR labeled to be deployed on github
 	Active            bool   `gorm:"type:bool;not null;default:false"` // active pull request
+	IsDeploying       bool   `gorm:"type:bool;not null;default:false"` // is deploying
 	Deployed          bool   `gorm:"type:bool;not null;default:false"` // is deployed (accessible over internet)
 	DeploymentPort    int32  `gorm:"type:bigint"`                      // deployment service port
 }
@@ -101,6 +102,7 @@ func (repo *PullRequestRepo) Deploy(prId int64, port int32) (*PullRequest, error
 	}
 
 	pr.Deployed = true
+	pr.IsDeploying = false // deployment is done
 	pr.DeploymentPort = port
 
 	err = repo.Save(pr)
@@ -121,6 +123,7 @@ func (repo *PullRequestRepo) UnDeploy(prId int64) (*PullRequest, error) {
 	}
 
 	pr.Deployed = false
+	pr.IsDeploying = false
 	pr.DeploymentPort = 0
 
 	err = repo.Save(pr)

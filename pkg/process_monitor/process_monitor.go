@@ -40,6 +40,10 @@ func NewProcessMonitor(pr *db.PullRequest) *ProcessMonitor {
 	return processMonitor
 }
 
+func (p *ProcessMonitor) SetPort(port int32) {
+	p.pr.DeploymentPort = port
+}
+
 func (p *ProcessMonitor) UpdateProgress(progress constants.ProcessProgress, status constants.ProcessOutcome) {
 	p.Progress = progress
 	p.Status = status
@@ -52,20 +56,23 @@ func (p *ProcessMonitor) UpdateProgress(progress constants.ProcessProgress, stat
 	progressMarkdown.PlainText(appURL)
 	progressMarkdown.H2("Status")
 
-	if p.Progress == constants.PROCESS_PROGRESS_DEPLOYING && p.Status == constants.PROCESS_OUTCOME_SUCCEEDED {
-		progressMarkdown.GreenBadge("Deployed")
-	}else if p.Status == constants.PROCESS_OUTCOME_FAILED{
-		progressMarkdown.RedBadge("Failed")
-	}else{
-		progressMarkdown.YellowBadge("Deploying")
+	isDeployed := (p.Progress == constants.PROCESS_PROGRESS_DEPLOYING && p.Status == constants.PROCESS_OUTCOME_SUCCEEDED) || (p.Progress == constants.PROCESS_PROGRESS_COMPLETED)
+	isUnDeployed := p.Progress == constants.PROCESS_PROGRESS_UN_DEPLOYING && p.Status == constants.PROCESS_OUTCOME_SUCCEEDED
+
+	if isDeployed {
+		progressMarkdown.GreenBadgef("Deployed")
+	} else if p.Status == constants.PROCESS_OUTCOME_FAILED {
+		progressMarkdown.RedBadgef("Failed")
+	} else if isUnDeployed {
+		progressMarkdown.YellowBadgef("Undeployed")
+	} else {
+		progressMarkdown.YellowBadgef("Deploying")
 	}
 
 	owner := p.pr.OwnerName
 	repo := p.pr.RepoName
 	prNumber := p.pr.PrNumber
 	commentId := p.pr.CommentID
-
-
 
 	log.Printf("CommentId: %d, Owner: %s, Repo: %s, PR Number: %d, Comment: %s\n", commentId, owner, repo, prNumber, progressMarkdown.String())
 

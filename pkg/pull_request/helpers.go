@@ -12,7 +12,7 @@ import (
 // createPullRequestFromPayload creates a PullRequest from the given payload.
 // It extracts the repository information, branch name, PR ID, PR number, and PR URL from the payload.
 // If any of these extractions fail, it returns an error.
-func CreatePullRequestFromPayload(event Event, payload map[string]interface{}) (*db.PullRequest, error) {
+func CreateOrAssociatePullRequestFromPayload(event Event, payload map[string]interface{}) (*db.PullRequest, error) {
 	repository, ok := payload["repository"].(map[string]interface{})
 	if !ok {
 		return &db.PullRequest{}, fmt.Errorf("failed to parse repository from payload")
@@ -63,7 +63,6 @@ func CreatePullRequestFromPayload(event Event, payload map[string]interface{}) (
 	if err != nil {
 		return &db.PullRequest{}, err
 	}
-
 
 	prRepo := db.PullRequestRepo{}
 	// Try to get the PR by its ID
@@ -204,6 +203,27 @@ func extractPRNumber(event Event, payload map[string]interface{}) (int64, error)
 	}
 
 	return int64(prNumber), nil
+}
+
+func extractLabelName(event Event, payload map[string]interface{}) (string, error) {
+	var err error
+	var temp interface{}
+
+	if event.name == "pull_request" {
+		temp, err = extractValueFromPayload(payload, "label", "name")
+	}
+
+	if err != nil {
+		return "", errors.New(event.GetNameAction() + " - Could not extract label name : " + err.Error())
+	}
+
+	labelName, ok := temp.(string)
+
+	if !ok {
+		return "", errors.New(event.GetNameAction() + " - Could not extract label name: value is not a string")
+	}
+
+	return labelName, nil
 }
 
 func extractUrl(event Event, payload map[string]interface{}) (string, error) {
