@@ -1,0 +1,10 @@
+- [x] check if there is active deployment and reload 
+- [x] get custom public URL for every PR 
+- [x] update github on every progress 
+- [x] deploy only PR with `IMBERE_DEPLOYMENT` label  
+- [x] undeploy on  PR close
+- [ ] clone with ssh keys
+- [ ] linux & mac full support
+- [ ] use temporary sub-domains instead of ip & port
+- [ ] cluster logs and store logs
+- [ ] UI to monitor the app
